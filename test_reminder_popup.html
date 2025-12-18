@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Reminder Popup Test</title>
+    <style>
+      body {
+        font-family: Arial;
+        padding: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        margin: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>20-20-20 Reminder Popup Test</h1>
+    <p>Click buttons to test the updated popup features:</p>
+    <button onclick="testPopup()">🎯 Test Popup (Random Angle + Sound)</button>
+    <button onclick="testSound()">🔊 Test Sound Only</button>
+    <button onclick="testMultiple()">🔁 Test 5 Different Angles</button>
+
+    <script>
+      function playStopStopSound() {
+        try {
+          const audioContext = new (window.AudioContext ||
+            window.webkitAudioContext)()
+
+          const playBeep = (frequency, duration, delay = 0) => {
+            const oscillator = audioContext.createOscillator()
+            const gainNode = audioContext.createGain()
+            oscillator.connect(gainNode)
+            gainNode.connect(audioContext.destination)
+            oscillator.frequency.value = frequency
+            oscillator.type = 'sine'
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+            gainNode.gain.exponentialRampToValueAtTime(
+              0.01,
+              audioContext.currentTime + duration
+            )
+            oscillator.start(audioContext.currentTime + delay)
+            oscillator.stop(audioContext.currentTime + delay + duration)
+          }
+
+          const now = audioContext.currentTime
+          playBeep(800, 0.3, now) // First "STOP"
+          playBeep(800, 0.3, now + 0.4) // Second "STOP"
+          console.log('Sound played!')
+        } catch (err) {
+          console.log('Could not play sound:', err)
+        }
+      }
+
+      function testPopup() {
+        const randomAngle = Math.random() * 8 - 4 // -4 to +4 degrees
+        console.log(`Popup angle: ${randomAngle}°`)
+
+        const modal = document.createElement('div')
+        modal.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      `
+
+        const box = document.createElement('div')
+        box.style.cssText = `
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        width: 400px;
+        text-align: center;
+        transform: rotate(${randomAngle}deg);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      `
+
+        box.innerHTML = `
+        <div style="font-size: 60px; margin-bottom: 20px;">👀</div>
+        <h2 style="color: #2563eb; margin: 0 0 20px 0;">Time for 20-20-20!</h2>
+        <p style="color: #666; margin: 20px 0;">Look 20 feet away for 20 seconds</p>
+        <p style="font-size: 12px; color: #999;">Modal is rotated <strong>${randomAngle.toFixed(
+          1
+        )}°</strong></p>
+        <button onclick="this.parentElement.parentElement.remove()" style="padding: 10px 20px; margin-top: 20px; cursor: pointer;">Close</button>
+      `
+
+        modal.appendChild(box)
+        document.body.appendChild(modal)
+
+        playStopStopSound()
+      }
+
+      function testSound() {
+        playStopStopSound()
+        alert('Sound test played! Check console and listen for beeps.')
+      }
+
+      function testMultiple() {
+        const angles = [
+          Math.random() * 8 - 4,
+          Math.random() * 8 - 4,
+          Math.random() * 8 - 4,
+          Math.random() * 8 - 4,
+          Math.random() * 8 - 4,
+        ]
+        console.log(
+          'Testing 5 popups with angles:',
+          angles.map((a) => a.toFixed(1) + '°').join(', ')
+        )
+        alert(
+          'Watch as popups appear at different angles:\n' +
+            angles.map((a) => a.toFixed(1) + '°').join(', ')
+        )
+      }
+    </script>
+  </body>
+</html>

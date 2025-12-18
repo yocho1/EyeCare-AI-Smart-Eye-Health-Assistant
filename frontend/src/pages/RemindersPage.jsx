@@ -6,15 +6,63 @@ import { apiService } from '../services/api';
 import { useApi } from '../hooks/useApi';
 import { useGlobalTimer } from '../hooks/useGlobalTimer';
 
+// Sound utility to play "stop stop" alert
+function playStopStopSound() {
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Create "stop" sound: high pitched beep
+    const playBeep = (frequency, duration, delay = 0) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+      
+      oscillator.start(audioContext.currentTime + delay);
+      oscillator.stop(audioContext.currentTime + delay + duration);
+    };
+    
+    // Play "STOP STOP" pattern - two high-pitched beeps
+    const now = audioContext.currentTime;
+    playBeep(800, 0.3, now);        // First "STOP"
+    playBeep(800, 0.3, now + 0.4);  // Second "STOP"
+  } catch (err) {
+    console.log('Could not play sound:', err);
+  }
+}
+
 // Modal Component for 20-20-20 Rule
 function TwentyTwentyModal({ isOpen, onClose, timeLeft, onComplete }) {
   if (!isOpen) return null;
 
   const progressPercent = ((20 - timeLeft) / 20) * 100;
+  
+  // Generate random angle for modal rotation (every render when open)
+  const randomAngle = Math.random() * 8 - 4; // Random angle between -4 and +4 degrees
+  
+  // Play sound on first render (when modal opens)
+  useEffect(() => {
+    if (isOpen) {
+      playStopStopSound();
+    }
+  }, [isOpen]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 animate-pulse">
+      <div 
+        className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 animate-pulse"
+        style={{
+          transform: `rotate(${randomAngle}deg)`,
+          transition: 'none'
+        }}
+      >
         {/* Header */}
         <div className="text-center mb-6">
           <div className="text-6xl mb-4">👀</div>

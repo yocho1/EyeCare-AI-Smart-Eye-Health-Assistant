@@ -55,39 +55,58 @@ export function useGlobalTimer() {
         globalTimerState.modalTimeLeft = 20
         notifyListeners()
 
-        // Play sound if enabled
+        // Play "STOP STOP" sound if enabled
         if (globalTimerState.activeTimer.notification_sound) {
           try {
             const audioContext = new (window.AudioContext ||
               window.webkitAudioContext)()
-            const oscillator = audioContext.createOscillator()
-            const gainNode = audioContext.createGain()
-            oscillator.connect(gainNode)
-            gainNode.connect(audioContext.destination)
-            oscillator.frequency.value = 800
-            oscillator.type = 'sine'
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-            gainNode.gain.exponentialRampToValueAtTime(
-              0.01,
-              audioContext.currentTime + 0.5
-            )
-            oscillator.start(audioContext.currentTime)
-            oscillator.stop(audioContext.currentTime + 0.5)
+
+            // Play two beeps saying "STOP STOP"
+            const playBeep = (frequency, duration, delay = 0) => {
+              const oscillator = audioContext.createOscillator()
+              const gainNode = audioContext.createGain()
+              oscillator.connect(gainNode)
+              gainNode.connect(audioContext.destination)
+              oscillator.frequency.value = frequency
+              oscillator.type = 'sine'
+              gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+              gainNode.gain.exponentialRampToValueAtTime(
+                0.01,
+                audioContext.currentTime + duration
+              )
+              oscillator.start(audioContext.currentTime + delay)
+              oscillator.stop(audioContext.currentTime + delay + duration)
+            }
+
+            const now = audioContext.currentTime
+            playBeep(800, 0.3, now) // First "STOP"
+            playBeep(800, 0.3, now + 0.4) // Second "STOP"
           } catch (e) {
             console.log('Audio playback failed:', e)
           }
         }
 
-        // Browser notification if enabled
+        // Browser notification if enabled (works even when app is not in focus)
         if (
           globalTimerState.activeTimer.use_browser_notification &&
           'Notification' in window
         ) {
           if (Notification.permission === 'granted') {
-            new Notification('🎯 20-20-20 Time!', {
-              body: 'Time to look away! Find something 20 feet away for 20 seconds.',
-              icon: '👀',
-            })
+            const notification = new Notification(
+              '🎯 STOP! Time for 20-20-20!',
+              {
+                body: 'Look away now! Find something 20 feet away for 20 seconds.',
+                icon: '👀',
+                tag: 'eyecare-20-20-20',
+                requireInteraction: true, // Keep notification visible until user interacts
+              }
+            )
+
+            // Play sound again through notification click to ensure it's heard
+            notification.onclick = () => {
+              window.focus()
+              notification.close()
+            }
           }
         }
 
