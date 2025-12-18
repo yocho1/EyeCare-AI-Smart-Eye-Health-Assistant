@@ -3,6 +3,61 @@
  */
 import { useState, useEffect } from 'react'
 
+// Sound utility function
+function playStopStopAlert() {
+  console.log('[SOUND] Playing STOP STOP alert...')
+
+  try {
+    // Create audio context
+    const audioContext = new (window.AudioContext ||
+      window.webkitAudioContext)()
+
+    // Resume context if suspended (required by browsers after user gesture)
+    if (audioContext.state === 'suspended') {
+      console.log('[SOUND] Audio context suspended, attempting to resume...')
+      audioContext.resume().then(() => {
+        console.log('[SOUND] Audio context resumed')
+        playBeeps(audioContext)
+      })
+    } else {
+      playBeeps(audioContext)
+    }
+  } catch (err) {
+    console.error('[SOUND] Failed to create audio context:', err)
+  }
+
+  function playBeeps(audioContext) {
+    const playBeep = (frequency, duration, delay = 0) => {
+      try {
+        const osc = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+
+        osc.connect(gain)
+        gain.connect(audioContext.destination)
+
+        osc.frequency.value = frequency
+        osc.type = 'sine'
+
+        const now = audioContext.currentTime
+        gain.gain.setValueAtTime(0.5, now)
+        gain.gain.exponentialRampToValueAtTime(0.01, now + duration)
+
+        osc.start(now + delay)
+        osc.stop(now + delay + duration)
+
+        console.log(`[SOUND] Beep: ${frequency}Hz for ${duration}s`)
+      } catch (e) {
+        console.error('[SOUND] Beep error:', e)
+      }
+    }
+
+    const now = audioContext.currentTime
+    playBeep(1000, 0.4, now) // First STOP - louder, higher frequency
+    playBeep(1000, 0.4, now + 0.5) // Second STOP
+    console.log('[SOUND] STOP STOP beeps queued')
+  }
+}
+
 let globalTimerState = {
   activeTimer: null,
   timerCountdown: 0,
@@ -12,6 +67,7 @@ let globalTimerState = {
 }
 
 let listeners = []
+let soundInterval = null // Track repeating sound interval
 
 const notifyListeners = () => {
   listeners.forEach((listener) => listener(globalTimerState))
@@ -55,35 +111,27 @@ export function useGlobalTimer() {
         globalTimerState.modalTimeLeft = 20
         notifyListeners()
 
-        // Play "STOP STOP" sound if enabled
+        // Start repeating "STOP STOP" sound if enabled
         if (globalTimerState.activeTimer.notification_sound) {
+          console.log('[TIMER] Sound enabled, starting repeating alert...')
+
+          // Play immediately
           try {
-            const audioContext = new (window.AudioContext ||
-              window.webkitAudioContext)()
-
-            // Play two beeps saying "STOP STOP"
-            const playBeep = (frequency, duration, delay = 0) => {
-              const oscillator = audioContext.createOscillator()
-              const gainNode = audioContext.createGain()
-              oscillator.connect(gainNode)
-              gainNode.connect(audioContext.destination)
-              oscillator.frequency.value = frequency
-              oscillator.type = 'sine'
-              gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-              gainNode.gain.exponentialRampToValueAtTime(
-                0.01,
-                audioContext.currentTime + duration
-              )
-              oscillator.start(audioContext.currentTime + delay)
-              oscillator.stop(audioContext.currentTime + delay + duration)
-            }
-
-            const now = audioContext.currentTime
-            playBeep(800, 0.3, now) // First "STOP"
-            playBeep(800, 0.3, now + 0.4) // Second "STOP"
+            playStopStopAlert()
           } catch (e) {
-            console.log('Audio playback failed:', e)
+            console.error('[TIMER] Sound play error:', e)
           }
+
+          // Then repeat every 3 seconds until modal is closed
+          if (soundInterval) clearInterval(soundInterval)
+          soundInterval = setInterval(() => {
+            console.log('[TIMER] Playing repeat sound...')
+            try {
+              playStopStopAlert()
+            } catch (e) {
+              console.error('[TIMER] Repeat sound error:', e)
+            }
+          }, 3000)
         }
 
         // Browser notification if enabled (works even when app is not in focus)
@@ -91,6 +139,7 @@ export function useGlobalTimer() {
           globalTimerState.activeTimer.use_browser_notification &&
           'Notification' in window
         ) {
+          // Request permission if not granted
           if (Notification.permission === 'granted') {
             const notification = new Notification(
               '🎯 STOP! Time for 20-20-20!',
@@ -99,6 +148,7 @@ export function useGlobalTimer() {
                 icon: '👀',
                 tag: 'eyecare-20-20-20',
                 requireInteraction: true, // Keep notification visible until user interacts
+                badge: '👀',
               }
             )
 
@@ -107,6 +157,26 @@ export function useGlobalTimer() {
               window.focus()
               notification.close()
             }
+          } else if (Notification.permission !== 'denied') {
+            // Auto-request permission if not yet decided
+            Notification.requestPermission().then((permission) => {
+              if (permission === 'granted') {
+                const notification = new Notification(
+                  '🎯 STOP! Time for 20-20-20!',
+                  {
+                    body: 'Look away now! Find something 20 feet away for 20 seconds.',
+                    icon: '👀',
+                    tag: 'eyecare-20-20-20',
+                    requireInteraction: true,
+                    badge: '👀',
+                  }
+                )
+                notification.onclick = () => {
+                  window.focus()
+                  notification.close()
+                }
+              }
+            })
           }
         }
 
@@ -123,14 +193,25 @@ export function useGlobalTimer() {
   useEffect(() => {
     if (!globalTimerState.showModal) return
 
+    console.log('[TIMER] Modal countdown started')
+
     const interval = setInterval(() => {
+      console.log(`[TIMER] Modal time left: ${globalTimerState.modalTimeLeft}s`)
       globalTimerState.modalTimeLeft -= 1
       notifyListeners()
 
       if (globalTimerState.modalTimeLeft <= 0) {
         // Modal time finished - auto close and restart timer
+        console.log('[TIMER] Modal countdown finished, auto-closing')
         clearInterval(interval)
         globalTimerState.showModal = false
+
+        // Stop repeating sound
+        if (soundInterval) {
+          console.log('[TIMER] Auto-close: stopping sound')
+          clearInterval(soundInterval)
+          soundInterval = null
+        }
 
         // Automatically restart the timer for next cycle
         if (globalTimerState.activeTimer) {
@@ -150,7 +231,10 @@ export function useGlobalTimer() {
       }
     }, 1000)
 
-    return () => clearInterval(interval)
+    return () => {
+      console.log('[TIMER] Modal countdown effect cleanup')
+      clearInterval(interval)
+    }
   }, [state.showModal])
 
   const startTimer = (reminder) => {
@@ -165,6 +249,13 @@ export function useGlobalTimer() {
   }
 
   const stopTimer = () => {
+    // Stop repeating sound
+    if (soundInterval) {
+      console.log('[TIMER] Stop timer: stopping sound')
+      clearInterval(soundInterval)
+      soundInterval = null
+    }
+
     globalTimerState.activeTimer = null
     globalTimerState.timerCountdown = 0
     globalTimerState.timerStartTime = null
@@ -175,6 +266,13 @@ export function useGlobalTimer() {
   }
 
   const closeModal = () => {
+    // Stop repeating sound
+    if (soundInterval) {
+      console.log('[TIMER] Close modal: stopping sound')
+      clearInterval(soundInterval)
+      soundInterval = null
+    }
+
     globalTimerState.showModal = false
     globalTimerState.activeTimer = null
     globalTimerState.timerCountdown = 0
@@ -185,6 +283,13 @@ export function useGlobalTimer() {
   }
 
   const completeModal = () => {
+    // Stop repeating sound
+    if (soundInterval) {
+      console.log('[TIMER] Complete modal: stopping sound')
+      clearInterval(soundInterval)
+      soundInterval = null
+    }
+
     globalTimerState.showModal = false
 
     if (globalTimerState.activeTimer) {

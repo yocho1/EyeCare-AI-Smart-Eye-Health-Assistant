@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Sound Alert Debug Test</title>
+    <style>
+      body {
+        font-family: Arial;
+        padding: 40px;
+        background: #f0f0f0;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      button {
+        padding: 15px 30px;
+        font-size: 16px;
+        cursor: pointer;
+        margin: 10px;
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+      .log {
+        background: #1a1a1a;
+        color: #00ff00;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 20px;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .log-entry {
+        margin: 5px 0;
+        padding: 3px 0;
+      }
+      .success {
+        color: #00ff00;
+      }
+      .error {
+        color: #ff4444;
+      }
+      .info {
+        color: #44aaff;
+      }
+      h1 {
+        color: #2563eb;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔊 Sound Alert Debug Test</h1>
+      <p>
+        Test the "STOP STOP" sound alert. Open browser console (F12) to see
+        detailed logs.
+      </p>
+
+      <button onclick="testSound()">▶️ Test Sound Alert</button>
+      <button onclick="testMultipleTimes()">
+        🔁 Test 3 Times (1sec apart)
+      </button>
+      <button onclick="clearLog()">🗑️ Clear Log</button>
+
+      <div class="log">
+        <div class="log-entry info">Waiting for test...</div>
+        <div id="logContainer"></div>
+      </div>
+    </div>
+
+    <script>
+      const logContainer = document.getElementById('logContainer')
+
+      function addLog(message, type = 'info') {
+        const entry = document.createElement('div')
+        entry.className = `log-entry ${type}`
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`
+        logContainer.appendChild(entry)
+        logContainer.parentElement.scrollTop =
+          logContainer.parentElement.scrollHeight
+        console.log(`[${type.toUpperCase()}] ${message}`)
+      }
+
+      function clearLog() {
+        logContainer.innerHTML = ''
+        addLog('Log cleared', 'info')
+      }
+
+      function playStopStopAlert() {
+        addLog('playStopStopAlert() called', 'info')
+
+        try {
+          // Check for audio support
+          const AudioContext = window.AudioContext || window.webkitAudioContext
+          if (!AudioContext) {
+            addLog('ERROR: AudioContext not supported', 'error')
+            return
+          }
+
+          const audioContext = new AudioContext()
+          addLog(
+            `AudioContext created (state: ${audioContext.state})`,
+            'success'
+          )
+
+          // Resume context if suspended
+          if (audioContext.state === 'suspended') {
+            addLog('AudioContext is suspended, attempting to resume...', 'info')
+            audioContext
+              .resume()
+              .then(() => {
+                addLog('AudioContext resumed', 'success')
+                playBeeps(audioContext)
+              })
+              .catch((err) => {
+                addLog(`Failed to resume AudioContext: ${err}`, 'error')
+              })
+          } else {
+            playBeeps(audioContext)
+          }
+
+          function playBeeps(ctx) {
+            addLog('Creating beeps...', 'info')
+
+            const playBeep = (frequency, duration, delay = 0) => {
+              try {
+                const osc = ctx.createOscillator()
+                const gain = ctx.createGain()
+
+                osc.connect(gain)
+                gain.connect(ctx.destination)
+
+                osc.frequency.value = frequency
+                osc.type = 'sine'
+
+                const now = ctx.currentTime
+                gain.gain.setValueAtTime(0.5, now)
+                gain.gain.exponentialRampToValueAtTime(0.01, now + duration)
+
+                osc.start(now + delay)
+                osc.stop(now + delay + duration)
+
+                addLog(
+                  `Beep scheduled: ${frequency}Hz, ${duration}s duration, ${delay}s delay`,
+                  'success'
+                )
+              } catch (e) {
+                addLog(`Beep creation failed: ${e.message}`, 'error')
+              }
+            }
+
+            const now = ctx.currentTime
+            playBeep(1000, 0.4, now) // First STOP
+            playBeep(1000, 0.4, now + 0.5) // Second STOP
+            addLog(
+              'Both beeps queued - you should hear 2 beeps now!',
+              'success'
+            )
+          }
+        } catch (err) {
+          addLog(`Fatal error: ${err.message}`, 'error')
+        }
+      }
+
+      function testSound() {
+        addLog('=== TEST SOUND STARTED ===', 'info')
+        playStopStopAlert()
+      }
+
+      function testMultipleTimes() {
+        addLog('=== MULTIPLE TESTS STARTED ===', 'info')
+        let count = 1
+        const interval = setInterval(() => {
+          addLog(`Test ${count}/3`, 'info')
+          playStopStopAlert()
+          count++
+          if (count > 3) {
+            clearInterval(interval)
+            addLog('=== ALL TESTS COMPLETED ===', 'success')
+          }
+        }, 1000)
+      }
+
+      // Initial message
+      addLog('Page loaded. Click buttons to test sound.', 'success')
+    </script>
+  </body>
+</html>

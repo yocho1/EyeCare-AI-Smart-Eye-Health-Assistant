@@ -8,33 +8,50 @@ import { useGlobalTimer } from '../hooks/useGlobalTimer';
 
 // Sound utility to play "stop stop" alert
 function playStopStopSound() {
+  console.log('[MODAL-SOUND] Playing alert...')
   try {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     
-    // Create "stop" sound: high pitched beep
-    const playBeep = (frequency, duration, delay = 0) => {
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = frequency;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-      
-      oscillator.start(audioContext.currentTime + delay);
-      oscillator.stop(audioContext.currentTime + delay + duration);
-    };
+    // Resume context if suspended
+    if (audioContext.state === 'suspended') {
+      console.log('[MODAL-SOUND] Context suspended, resuming...')
+      audioContext.resume().then(() => playBeeps(audioContext))
+    } else {
+      playBeeps(audioContext)
+    }
     
-    // Play "STOP STOP" pattern - two high-pitched beeps
-    const now = audioContext.currentTime;
-    playBeep(800, 0.3, now);        // First "STOP"
-    playBeep(800, 0.3, now + 0.4);  // Second "STOP"
+    function playBeeps(ctx) {
+      const playBeep = (frequency, duration, delay = 0) => {
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.frequency.value = frequency;
+          osc.type = 'sine';
+          
+          const now = ctx.currentTime;
+          gain.gain.setValueAtTime(0.5, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+          
+          osc.start(now + delay);
+          osc.stop(now + delay + duration);
+          
+          console.log(`[MODAL-SOUND] Beep: ${frequency}Hz`)
+        } catch (e) {
+          console.error('[MODAL-SOUND] Beep failed:', e)
+        }
+      };
+      
+      const now = ctx.currentTime;
+      playBeep(1000, 0.4, now);        // First STOP
+      playBeep(1000, 0.4, now + 0.5);  // Second STOP
+      console.log('[MODAL-SOUND] Beeps queued')
+    }
   } catch (err) {
-    console.log('Could not play sound:', err);
+    console.error('[MODAL-SOUND] Failed:', err);
   }
 }
 
@@ -47,12 +64,7 @@ function TwentyTwentyModal({ isOpen, onClose, timeLeft, onComplete }) {
   // Generate random angle for modal rotation (every render when open)
   const randomAngle = Math.random() * 8 - 4; // Random angle between -4 and +4 degrees
   
-  // Play sound on first render (when modal opens)
-  useEffect(() => {
-    if (isOpen) {
-      playStopStopSound();
-    }
-  }, [isOpen]);
+  // Note: Sound is handled by useGlobalTimer hook, not here
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -127,15 +139,30 @@ function TwentyTwentyModal({ isOpen, onClose, timeLeft, onComplete }) {
 
 // Countdown Timer Display Component
 function CountdownDisplay({ reminder, timeLeft }) {
+  if (!reminder) {
+    console.error('[CountdownDisplay] No reminder provided');
+    return null;
+  }
+
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
-  const percentage = (timeLeft / (reminder.interval_minutes * 60)) * 100;
+  const totalSeconds = reminder.interval_minutes * 60;
+  const percentage = totalSeconds > 0 ? (timeLeft / totalSeconds) * 100 : 0;
+
+  console.log('[CountdownDisplay]', { 
+    timeLeft, 
+    minutes, 
+    seconds, 
+    totalSeconds, 
+    percentage,
+    reminderType: reminder.reminder_type 
+  });
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-lg p-4 border-2 border-blue-300">
+    <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-lg p-4 border-2 border-blue-300 shadow-lg">
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-bold text-blue-600">⏱️ Next Break In:</h4>
-        <span className="text-2xl font-bold text-blue-600">
+        <span className="text-3xl font-bold text-blue-600 font-mono">
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </span>
       </div>
@@ -144,12 +171,12 @@ function CountdownDisplay({ reminder, timeLeft }) {
       <div className="w-full bg-gray-300 rounded-full h-3 overflow-hidden">
         <div
           className="bg-gradient-to-r from-blue-500 to-green-500 h-full transition-all duration-1000"
-          style={{ width: `${percentage}%` }}
+          style={{ width: `${Math.max(0, Math.min(100, percentage))}%` }}
         ></div>
       </div>
       
       <p className="text-xs text-gray-600 mt-2 text-center">
-        Get ready to look away and rest your eyes!
+        <strong>{reminder.reminder_type}</strong> - Get ready to look away and rest your eyes!
       </p>
     </div>
   );
@@ -242,18 +269,58 @@ export function RemindersPage() {
     }
   };
 
+  const handleTestSoundAndNotifications = () => {
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then((permission) => {
+        if (permission === 'granted') {
+          const notification = new Notification('✅ Notifications Enabled!', {
+            body: 'You will now receive alerts when working outside the app.',
+            icon: '👀',
+            requireInteraction: false,
+          });
+          setTimeout(() => notification.close(), 3000);
+        }
+      });
+    }
+    
+    // Test sound
+    playStopStopSound();
+    
+    alert('✅ Sound test played!\n\nIf you heard "beep beep", sound is working.\nIf you got a notification popup, alerts outside the app will work.');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">⏰ Eye Health Reminders</h1>
 
+        {/* Test Sound & Notifications Button */}
+        <div className="mb-6">
+          <button
+            onClick={handleTestSoundAndNotifications}
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg transition transform hover:scale-105"
+          >
+            🔊 Test Sound & Enable Notifications (Click First!)
+          </button>
+          <p className="text-xs text-gray-600 mt-2 text-center">
+            ⚠️ Click this first to enable sound and notifications outside the app
+          </p>
+        </div>
+
         {/* Active Timer Display */}
-        {activeTimer && (
+        {activeTimer ? (
           <div className="mb-6">
             <CountdownDisplay 
               reminder={activeTimer} 
               timeLeft={timerCountdown}
             />
+          </div>
+        ) : (
+          <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+            <p className="text-sm text-gray-700">
+              ℹ️ No active timer. Enable a reminder below and click <strong>Start</strong> to begin countdown.
+            </p>
           </div>
         )}
 

@@ -1,0 +1,11 @@
+# Audio File Placeholder
+
+Create a simple beep audio file named "beep.mp3" in this directory for the sound alert.
+
+You can:
+1. Record yourself saying "STOP STOP"
+2. Use a text-to-speech service
+3. Download a free beep sound from freesound.org
+4. Use an online TTS: https://ttsmp3.com/ (type "Stop Stop", download as MP3)
+
+Place the file as: frontend/public/beep.mp3
